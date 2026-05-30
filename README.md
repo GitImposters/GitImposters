@@ -1,36 +1,128 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GitImposters
 
-## Getting Started
+GitImposters analyzes GitHub repositories across 6 engineering dimensions and generates an **Imposter Score** — telling you whether a developer's work reflects genuine skill or assembled appearances. Built for hiring managers, recruiters, and teams vetting freelancers.
 
-First, run the development server:
+## Tech Stack
+
+- **Frontend:** Next.js 16 App Router (React + TypeScript), Tailwind CSS v4, shadcn/ui
+- **Backend/DB:** Supabase (Postgres, Auth, Row Level Security, Edge Functions)
+- **AI:** Groq API (`llama-3.3-70b-versatile`) for authorship analysis, README scoring, and plain-English summaries
+- **GitHub Data:** GitHub REST API + GitHub App for private repo access
+- **Deployment:** Vercel (frontend) + Supabase (backend + edge functions)
+
+---
+
+## Local Development Setup
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/adityadipakpatel/gitimposters.git
+cd gitimposters
+npm install
+```
+
+### 2. Environment variables
+
+```bash
+cp .env.example .env.local
+```
+
+Open `.env.local` and fill in every value (see sections below for how to get each one).
+
+### 3. Supabase project
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Copy your project URL and anon key into `.env.local`
+3. Copy your service role key into `.env.local`
+4. Open the **SQL Editor** and run the full contents of `supabase/migrations/001_initial_schema.sql`
+
+### 4. GitHub OAuth App (user login)
+
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**
+2. Set **Homepage URL:** `http://localhost:3000`
+3. Set **Authorization callback URL:** `http://localhost:3000/api/auth/callback`
+4. Copy **Client ID** and **Client Secret** into `.env.local`
+5. In your Supabase project: **Authentication → Providers → GitHub**, enable it and paste the Client ID and Secret
+
+### 5. GitHub App (private repo access)
+
+1. Go to **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App**
+2. Set **Webhook URL:** `https://your-domain.com/api/github/webhook` (use a tunnel like ngrok locally)
+3. Set **Webhook secret** (any strong random string) and add to `.env.local`
+4. Set permissions:
+   - Repository: **Contents** (Read), **Metadata** (Read), **Pull requests** (Read)
+5. Install the app on your account
+6. Generate and download the **private key** (.pem file)
+7. Copy **App ID** and the contents of the .pem file into `.env.local` (replace newlines with `\n`)
+
+### 6. Groq API key
+
+Sign up at [console.groq.com](https://console.groq.com), create an API key, and add it to `.env.local`.
+
+### 7. Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and log in with GitHub.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setting yourself as admin
 
-## Learn More
+After logging in once, open your Supabase **SQL Editor** and run:
 
-To learn more about Next.js, take a look at the following resources:
+```sql
+UPDATE public.users SET role = 'admin' WHERE github_username = 'your-github-username';
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then visit `/admin` to access the admin dashboard.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Vercel (frontend)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push to GitHub and import the repo on [vercel.com](https://vercel.com)
+2. Add all environment variables from `.env.local` to the Vercel project settings
+3. Deploy — Vercel auto-detects Next.js and runs `npm run build`
+
+### Supabase Edge Functions
+
+Deploy the analysis function:
+
+```bash
+supabase functions deploy analyze-repo
+```
+
+Set the required secrets in Supabase:
+
+```bash
+supabase secrets set GROQ_API_KEY=your-key
+supabase secrets set GITHUB_APP_ID=your-id
+supabase secrets set GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."
+supabase secrets set GITHUB_APP_WEBHOOK_SECRET=your-secret
+supabase secrets set GITHUB_PAT=your-personal-access-token
+```
+
+### Production environment variables
+
+Update `NEXT_PUBLIC_APP_URL` in Vercel to your production domain (e.g. `https://gitimposters.com`).
+
+---
+
+## Analysis Modules
+
+| Module | Weight | What it measures |
+|--------|--------|-----------------|
+| Commit Quality | 20% | Message quality, vague/empty commits, large monolithic commits |
+| Code Authorship | 20% | Style consistency, AI-generated signals, copy-paste patterns (via Groq) |
+| PR & Review Habits | 15% | Description quality, self-merge ratio, review activity, merge speed |
+| Repo Hygiene | 15% | README quality (via Groq), .gitignore, LICENSE, folder structure |
+| Contribution Consistency | 15% | Temporal patterns, bulk uploads, gap-then-burst behavior |
+| Testing & CI/CD | 15% | Test file presence, CI configuration detection |
+
+**Imposter Score** = `100 − weighted_average`. Higher = more red flags.

@@ -23,9 +23,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Account suspended' }, { status: 403 });
   }
 
-  // Validate repo URL using strict regex via parseRepoUrl
+  // Validate repo URL — strict character-class regex applied before any DB/API call
   const body = await request.json();
   const { repo_url } = body;
+  const GITHUB_REPO_REGEX = /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
+  if (!GITHUB_REPO_REGEX.test(repo_url)) {
+    return NextResponse.json({ error: 'Invalid GitHub repo URL format' }, { status: 400 });
+  }
   const parsed = parseRepoUrl(repo_url);
   if (!parsed) {
     return NextResponse.json({ error: 'Invalid GitHub repo URL' }, { status: 400 });
