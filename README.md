@@ -17,8 +17,8 @@ GitImposters analyzes GitHub repositories across 6 engineering dimensions and ge
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/adityadipakpatel/gitimposters.git
-cd gitimposters
+git clone https://github.com/GitImposters/GitImposters.git
+cd GitImposters
 npm install
 ```
 
