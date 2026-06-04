@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import AnalysisProgressStepper from './AnalysisProgressStepper';
 
-const GITHUB_URL_REGEX = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(\.git)?$/;
+const GITHUB_URL_REGEX = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(\.git)?\/?$/;
 
 export default function RepoSearchBar() {
   const router = useRouter();
@@ -27,7 +27,7 @@ export default function RepoSearchBar() {
     e.preventDefault();
     setError('');
 
-    const trimmed = url.trim();
+    const trimmed = url.trim().replace(/\/$/, '');
     if (!GITHUB_URL_REGEX.test(trimmed)) {
       setError('Enter a valid GitHub repo URL — e.g. https://github.com/owner/repo');
       return;
