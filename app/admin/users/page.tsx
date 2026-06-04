@@ -1,24 +1,25 @@
-import { adminSupabase } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth/helpers';
+import { sql } from '@/lib/db/client';
 import UsersTable, { type UserRow } from '@/components/admin/UsersTable';
 
-export default async function AdminUsersPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export const dynamic = 'force-dynamic';
 
-  const [usersRes, logsRes] = await Promise.all([
-    adminSupabase.from('users').select('*').order('created_at', { ascending: false }),
-    adminSupabase.from('search_logs').select('searcher_user_id'),
+export default async function AdminUsersPage() {
+  const admin = await requireAdmin();
+
+  const [usersData, logsData] = await Promise.all([
+    sql`SELECT * FROM users ORDER BY created_at DESC`,
+    sql`SELECT searcher_user_id FROM search_logs WHERE searcher_user_id IS NOT NULL`,
   ]);
 
   const searchCounts = new Map<string, number>();
-  for (const log of logsRes.data ?? []) {
+  for (const log of logsData) {
     if (log.searcher_user_id) {
       searchCounts.set(log.searcher_user_id, (searchCounts.get(log.searcher_user_id) ?? 0) + 1);
     }
   }
 
-  const users: UserRow[] = (usersRes.data ?? []).map((u) => ({
+  const users: UserRow[] = usersData.map((u) => ({
     id: u.id,
     github_username: u.github_username,
     github_avatar_url: u.github_avatar_url,
@@ -34,7 +35,7 @@ export default async function AdminUsersPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold text-zinc-100">Users</h1>
-      <UsersTable users={users} currentAdminId={user?.id ?? ''} />
+      <UsersTable users={users} currentAdminId={admin.id} />
     </div>
   );
 }

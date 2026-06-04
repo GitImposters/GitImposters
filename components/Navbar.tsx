@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, LayoutDashboard, LogOut } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { authClient } from '@/lib/auth/client';
 
 interface UserInfo {
   avatar_url?: string;
@@ -19,12 +19,11 @@ export default function Navbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
+    authClient.getSession().then(({ data }) => {
+      if (data?.user) {
         setUser({
-          avatar_url: data.user.user_metadata?.avatar_url,
-          username: data.user.user_metadata?.user_name,
+          avatar_url: data.user.image ?? undefined,
+          username: data.user.name ?? undefined,
         });
       }
     });

@@ -1,20 +1,16 @@
 import { AlertOctagon } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
+import { auth } from '@/lib/auth/server';
+import { sql } from '@/lib/db/client';
 
 export default async function SuspendedPage() {
   let suspensionReason: string | null = null;
 
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (user) {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('suspension_reason')
-        .eq('id', user.id)
-        .single();
-
+    const { data: session } = await auth.getSession();
+    if (session?.user) {
+      const [profile] = await sql`
+        SELECT suspension_reason FROM users WHERE id = ${session.user.id}
+      `.catch(() => []);
       suspensionReason = profile?.suspension_reason ?? null;
     }
   } catch {

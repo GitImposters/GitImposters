@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
-import { createServiceClient } from '@/lib/supabase/service';
+import { sql } from '@/lib/db/client';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -21,29 +21,32 @@ export async function POST(request: NextRequest) {
 
   if (event === 'installation') {
     const installationId = String(payload.installation.id);
-    const githubUsername: string = payload.sender.login;
+    const githubLogin: string = payload.sender.login;
+    const githubNumericId: string = String(payload.sender.id);
     const action: string = payload.action;
-    const supabase = createServiceClient();
 
-    if (action === 'created') {
-      await supabase
-        .from('users')
-        .update({ github_installation_id: installationId })
-        .eq('github_username', githubUsername);
+    if (action === 'created' || action === 'unsuspend') {
+      // Match by neon_auth.account.accountId (GitHub numeric user ID) for reliable lookup
+      await sql`
+        UPDATE users u
+        SET github_installation_id = ${installationId},
+            github_username = ${githubLogin}
+        FROM neon_auth.account a
+        WHERE a."userId" = u.id
+          AND a."providerId" = 'github'
+          AND a."accountId" = ${githubNumericId}
+      `;
     }
 
     if (action === 'deleted' || action === 'suspend') {
-      await supabase
-        .from('users')
-        .update({ github_installation_id: null })
-        .eq('github_username', githubUsername);
-    }
-
-    if (action === 'unsuspend') {
-      await supabase
-        .from('users')
-        .update({ github_installation_id: installationId })
-        .eq('github_username', githubUsername);
+      await sql`
+        UPDATE users u
+        SET github_installation_id = NULL
+        FROM neon_auth.account a
+        WHERE a."userId" = u.id
+          AND a."providerId" = 'github'
+          AND a."accountId" = ${githubNumericId}
+      `;
     }
   }
 

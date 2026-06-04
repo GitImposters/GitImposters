@@ -1,14 +1,27 @@
-import { adminSupabase } from '@/lib/supabase/admin';
+import { sql } from '@/lib/db/client';
 import { AuthLogsTable, type AuthLogRow } from '@/components/admin/LogsTable';
 
-export default async function AdminAuthLogsPage() {
-  const { data } = await adminSupabase
-    .from('auth_logs')
-    .select('id, user_id, event_type, created_at, ip_hash, users(github_username, github_avatar_url)')
-    .order('created_at', { ascending: false })
-    .limit(1000);
+export const dynamic = 'force-dynamic';
 
-  const logs = (data ?? []) as unknown as AuthLogRow[];
+export default async function AdminAuthLogsPage() {
+  const data = await sql`
+    SELECT
+      al.id, al.user_id, al.event_type, al.created_at, al.ip_hash,
+      u.github_username, u.github_avatar_url
+    FROM auth_logs al
+    LEFT JOIN users u ON u.id = al.user_id
+    ORDER BY al.created_at DESC
+    LIMIT 1000
+  `;
+
+  const logs = data.map((row) => ({
+    id: row.id,
+    user_id: row.user_id,
+    event_type: row.event_type,
+    created_at: row.created_at,
+    ip_hash: row.ip_hash,
+    users: { github_username: row.github_username, github_avatar_url: row.github_avatar_url },
+  })) as unknown as AuthLogRow[];
 
   return (
     <div>

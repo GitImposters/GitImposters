@@ -3,7 +3,8 @@ import {
   ExternalLink, Star, GitFork, Lock, Globe, Bot,
   GitCommit, Code2, GitPullRequest, FolderOpen, Activity, TestTube2,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db/client';
+import { auth } from '@/lib/auth/server';
 import { cn } from '@/lib/utils';
 import type { Report, ReportFindings } from '@/types';
 import RadarChart from '@/components/RadarChart';
@@ -46,13 +47,8 @@ export default async function ReportPage({
   params: Promise<{ report_id: string }>;
 }) {
   const { report_id } = await params;
-  const supabase = await createClient();
 
-  const { data } = await supabase
-    .from('reports')
-    .select('*')
-    .eq('id', report_id)
-    .single();
+  const [data] = await sql`SELECT * FROM reports WHERE id = ${report_id}::uuid`.catch(() => []);
 
   if (!data) {
     return (
@@ -76,7 +72,8 @@ export default async function ReportPage({
   const style = getScoreCardStyle(report.final_imposter_score);
 
   // Auth check for re-analyze button (no redirect — public page)
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
   const isExpired = new Date(report.cached_until) < new Date();
   const canReanalyze = isExpired && !!user;
 

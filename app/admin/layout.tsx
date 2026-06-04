@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/supabase/auth';
+import { requireAdmin } from '@/lib/auth/helpers';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

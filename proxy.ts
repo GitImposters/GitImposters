@@ -1,8 +1,7 @@
-import { createServerClient } from '@supabase/ssr';
+import { auth } from '@/lib/auth/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Simple in-memory rate limiter for unauthenticated API requests.
-// Resets on cold starts; good enough for basic abuse prevention.
+// In-memory rate limiter — resets on cold start
 const ipMap = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(ip: string): boolean {
@@ -17,45 +16,25 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
+const pageGuard = auth.middleware({ loginUrl: '/login' });
+
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  // Unauthenticated /api/* requests: 30 req/min per IP
-  if (pathname.startsWith('/api/') && !user) {
+  // Rate-limit all non-auth API calls (30 req/min per IP)
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
     if (isRateLimited(ip)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
   }
 
-  // Protected page routes
-  if ((pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) && !user) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Protect page routes — redirect to login if no session
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
+    return pageGuard(request);
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {

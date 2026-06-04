@@ -1,23 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { adminSupabase } from '@/lib/supabase/admin';
+import { auth } from '@/lib/auth/server';
+import { sql } from '@/lib/db/client';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: session } = await auth.getSession();
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: caller } = await adminSupabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
+  const [caller] = await sql`SELECT role FROM users WHERE id = ${session.user.id}`;
   if (caller?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -25,11 +18,6 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const reason: string | null = body.reason ?? null;
 
-  const { error } = await adminSupabase
-    .from('users')
-    .update({ is_suspended: true, suspension_reason: reason })
-    .eq('id', id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await sql`UPDATE users SET is_suspended = true, suspension_reason = ${reason} WHERE id = ${id}`;
   return NextResponse.json({ ok: true });
 }

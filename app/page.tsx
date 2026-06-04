@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Search, BarChart2, Share2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { authClient } from '@/lib/auth/client';
 import { Button } from '@/components/ui/button';
 
 const features = [
@@ -30,9 +30,8 @@ export default function HomePage() {
   const [ctaHref, setCtaHref] = useState('/login');
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCtaHref('/dashboard');
+    authClient.getSession().then(({ data }) => {
+      if (data?.user) setCtaHref('/dashboard');
     });
   }, []);
 

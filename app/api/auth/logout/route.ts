@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/service';
+import { auth } from '@/lib/auth/server';
+import { sql } from '@/lib/db/client';
 import { hashIP } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
   const { origin } = new URL(request.url);
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: session } = await auth.getSession();
 
-  if (user) {
-    const serviceClient = createServiceClient();
-    await serviceClient.from('auth_logs').insert({
-      user_id: user.id,
-      event_type: 'logout',
-      ip_hash: hashIP(request.headers.get('x-forwarded-for') ?? ''),
-      user_agent: request.headers.get('user-agent') ?? '',
-    });
+  if (session?.user) {
+    await sql`
+      INSERT INTO auth_logs (user_id, event_type, ip_hash, user_agent)
+      VALUES (
+        ${session.user.id},
+        'logout',
+        ${hashIP(request.headers.get('x-forwarded-for') ?? '')},
+        ${request.headers.get('user-agent') ?? ''}
+      )
+    `;
   }
 
-  await supabase.auth.signOut();
+  await auth.signOut();
   return NextResponse.redirect(`${origin}/login`);
 }

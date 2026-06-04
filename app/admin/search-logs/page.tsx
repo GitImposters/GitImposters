@@ -1,5 +1,7 @@
-import { adminSupabase } from '@/lib/supabase/admin';
+import { sql } from '@/lib/db/client';
 import { SearchLogsTable, type SearchLogRow } from '@/components/admin/LogsTable';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AdminSearchLogsPage({
   searchParams,
@@ -8,15 +10,30 @@ export default async function AdminSearchLogsPage({
 }) {
   const { user: userParam } = await searchParams;
 
-  const { data } = await adminSupabase
-    .from('search_logs')
-    .select(
-      'id, searcher_user_id, target_repo_url, target_repo_owner, report_id, final_imposter_score, created_at, users(github_username, github_avatar_url), reports(verdict_label)'
-    )
-    .order('created_at', { ascending: false })
-    .limit(1000);
+  const data = await sql`
+    SELECT
+      sl.id, sl.searcher_user_id, sl.target_repo_url, sl.target_repo_owner,
+      sl.report_id, sl.final_imposter_score, sl.created_at,
+      u.github_username, u.github_avatar_url,
+      r.verdict_label
+    FROM search_logs sl
+    LEFT JOIN users u ON u.id = sl.searcher_user_id
+    LEFT JOIN reports r ON r.id = sl.report_id
+    ORDER BY sl.created_at DESC
+    LIMIT 1000
+  `;
 
-  const logs = (data ?? []) as unknown as SearchLogRow[];
+  const logs = data.map((row) => ({
+    id: row.id,
+    searcher_user_id: row.searcher_user_id,
+    target_repo_url: row.target_repo_url,
+    target_repo_owner: row.target_repo_owner,
+    report_id: row.report_id,
+    final_imposter_score: row.final_imposter_score,
+    created_at: row.created_at,
+    users: { github_username: row.github_username, github_avatar_url: row.github_avatar_url },
+    reports: { verdict_label: row.verdict_label },
+  })) as unknown as SearchLogRow[];
 
   return (
     <div>
